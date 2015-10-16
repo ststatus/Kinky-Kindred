@@ -63,12 +63,25 @@ namespace Kinky_Kindred {
             haraM.AddItem(new MenuItem("harassmanaminE", "E requires % mana", true).SetValue(new Slider(45, 0, 100)));
             haraM.AddItem(new MenuItem("harassActive", "Active", true).SetValue(true));
 
+            Menu SmiteM = JungM.AddSubMenu(new Menu("Smite", "Smite"));
+            SmiteM.AddItem(new MenuItem("always_smite_red", "Always Smite Red", true).SetValue(false));
+            SmiteM.AddItem(new MenuItem("smite_r_if__dying", "Smite Red if health < %", true).SetValue(new Slider(15, 1, 100)));
+            SmiteM.AddItem(new MenuItem("always_smite_blue", "Always Smite Blue", true).SetValue(false));
+            SmiteM.AddItem(new MenuItem("always_smite_frog", "Always Smite Frog", true).SetValue(false));
+            SmiteM.AddItem(new MenuItem("smite_brf_til_lvl", "Only Smite Red/Blue/Frog til level:", true).SetValue(new Slider(10, 1, 18)));
+            SmiteM.AddItem(new MenuItem("always_smite_wolf", "Always Smite Wolves", true).SetValue(false));
+            SmiteM.AddItem(new MenuItem("always_smite_golems", "Always Smite Golems", true).SetValue(true));
+            SmiteM.AddItem(new MenuItem("always_smite_wraiths", "Always Smite Wraiths", true).SetValue(true));
+            SmiteM.AddItem(new MenuItem("always_smite_baron", "Always Smite Baron", true).SetValue(true));
+            SmiteM.AddItem(new MenuItem("always_smite_dragon", "Always Smite Dragon", true).SetValue(true));
+            SmiteM.AddItem(new MenuItem("always_smite_dragon", "Kill Steal Smite", true).SetValue(true));
+
             JungM.AddItem(new MenuItem("jungleclearQ", "Use Q", true).SetValue(true));
-            LaneM.AddItem(new MenuItem("jungleclearmanaminQ", "Q requires % mana", true).SetValue(new Slider(25, 0, 100)));
+            JungM.AddItem(new MenuItem("jungleclearmanaminQ", "Q requires % mana", true).SetValue(new Slider(25, 0, 100)));
             JungM.AddItem(new MenuItem("jungleclearE", "Use E", true).SetValue(true));
-            LaneM.AddItem(new MenuItem("jungleclearmanaminE", "E requires % mana", true).SetValue(new Slider(35, 0, 100)));
+            JungM.AddItem(new MenuItem("jungleclearmanaminE", "E requires % mana", true).SetValue(new Slider(35, 0, 100)));
             JungM.AddItem(new MenuItem("jungleclearW", "Use W", true).SetValue(true));
-            LaneM.AddItem(new MenuItem("jungleclearmanaminW", "W requires % mana", true).SetValue(new Slider(40, 0, 100)));
+            JungM.AddItem(new MenuItem("jungleclearmanaminW", "W requires % mana", true).SetValue(new Slider(40, 0, 100)));
             JungM.AddItem(new MenuItem("jungleActive", "Active", true).SetValue(true));
 
             LaneM.AddItem(new MenuItem("laneclearQ", "Use Q", true).SetValue(true));
