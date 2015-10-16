@@ -23,6 +23,8 @@ namespace Kinky_Kindred {
         static float Manapercent { get { return Player.ManaPercent; } }
 
         static Spell Q, W, E, R;
+        static SpellSlot smite = SpellSlot.Unknown;
+        static Spell smiteSpell;
         static Items.Item botrk = new Items.Item(3153, 550);
         static Items.Item mercurial = new Items.Item(3139, 0f);
         static Items.Item dervish = new Items.Item(3137, 0f);
@@ -37,6 +39,7 @@ namespace Kinky_Kindred {
 
             menuload();
             Game.OnUpdate += Game_OnUpdate;
+            smitespell();
         }
         static void Main(string[] args) { CustomEvents.Game.OnGameLoad += Game_OnGameLoad; }
         #endregion
@@ -65,7 +68,7 @@ namespace Kinky_Kindred {
 
             Menu SmiteM = JungM.AddSubMenu(new Menu("Smite", "Smite"));
             SmiteM.AddItem(new MenuItem("always_smite_red", "Always Smite Red", true).SetValue(false));
-            SmiteM.AddItem(new MenuItem("smite_r_if__dying", "Smite Red if health < %", true).SetValue(new Slider(15, 1, 100)));
+            SmiteM.AddItem(new MenuItem("smite_r_if__dying", "Always Smite Red if health < %", true).SetValue(new Slider(15, 1, 100)));
             SmiteM.AddItem(new MenuItem("always_smite_blue", "Always Smite Blue", true).SetValue(false));
             SmiteM.AddItem(new MenuItem("always_smite_frog", "Always Smite Frog", true).SetValue(false));
             SmiteM.AddItem(new MenuItem("smite_brf_til_lvl", "Only Smite Red/Blue/Frog til level:", true).SetValue(new Slider(10, 1, 18)));
@@ -74,7 +77,7 @@ namespace Kinky_Kindred {
             SmiteM.AddItem(new MenuItem("always_smite_wraiths", "Always Smite Wraiths", true).SetValue(true));
             SmiteM.AddItem(new MenuItem("always_smite_baron", "Always Smite Baron", true).SetValue(true));
             SmiteM.AddItem(new MenuItem("always_smite_dragon", "Always Smite Dragon", true).SetValue(true));
-            SmiteM.AddItem(new MenuItem("always_smite_dragon", "Kill Steal Smite", true).SetValue(true));
+            SmiteM.AddItem(new MenuItem("smite_ks", "Kill Steal Smite", true).SetValue(true));
 
             JungM.AddItem(new MenuItem("jungleclearQ", "Use Q", true).SetValue(true));
             JungM.AddItem(new MenuItem("jungleclearmanaminQ", "Q requires % mana", true).SetValue(new Slider(25, 0, 100)));
@@ -112,6 +115,7 @@ namespace Kinky_Kindred {
             if (Player.IsDead) { return; }
 
             smartW();
+            checksmitecamps();
 
             if (kinm.Item("killsteal", true).GetValue<Boolean>()) {
                 Killsteal();
@@ -241,12 +245,23 @@ namespace Kinky_Kindred {
         }
 
         static void Killsteal() {
+            var cansmite = false;
+            if (kinm.Item("smite_ks", true).GetValue<Boolean>() && smite != SpellSlot.Unknown && Player.Spellbook.CanUseSpell(smite) == SpellState.Ready) { cansmite = true; }
             foreach (var enemy in ObjectManager.Get<Obj_AI_Hero>().Where(h => Q.CanCast(h) || E.CanCast(h))) {
-                if (hasundyingbuff(enemy)) { continue; }
+                if (hasundyingbuff(enemy) || enemy.HasBuffOfType(BuffType.Invulnerability) || enemy.HasBuffOfType(BuffType.SpellShield) || enemy.HasBuffOfType(BuffType.SpellImmunity)) { continue; }
+
                 var edmg = E.GetDamage(enemy);
                 var qdmg = Q.GetDamage(enemy);
                 var enemyhealth = enemy.Health;
                 var enemyregen = enemy.HPRegenRate / 2;
+                double smitedmg = 0;
+                if (cansmite) { smitedmg = Player.GetSummonerSpellDamage(enemy, Damage.SummonerSpell.Smite); }
+
+
+                if (cansmite && smitedmg > enemy.Health) {
+                    Player.Spellbook.CastSpell(smite, enemy);
+                }
+
                 if (((enemyhealth + enemyregen) <= edmg) && E.CanCast(enemy) && E.CanCast(enemy)) {
                     E.Cast(enemy);
                 }
@@ -255,9 +270,15 @@ namespace Kinky_Kindred {
                     Q.Cast(enemy.ServerPosition);
                 }
 
+                //check E+smite combo
+                if (cansmite && E.IsReady() && ((smitedmg + edmg) > (enemyhealth + enemyregen))) {
+                    E.Cast(enemy);
+                    Player.Spellbook.CastSpell(smite, enemy);
+                }
+
                 //full e+q combo
                 if (((enemyhealth + enemyregen) <= (edmg + qdmg)) && E.CanCast(enemy) && Q.CanCast(enemy)) {
-                    E.Cast(enemy); return;
+                    E.Cast(enemy);
                     Q.Cast(enemy.ServerPosition);
                 }
             }
@@ -265,6 +286,58 @@ namespace Kinky_Kindred {
         #endregion
 
         #region MISC FUNCTIONS
+        static void checksmitecamps() {
+            if (smite == SpellSlot.Unknown || Player.Spellbook.CanUseSpell(smite) != SpellState.Ready) { return; }
+            var minion = MinionManager.GetMinions(E.Range, MinionTypes.All, MinionTeam.All, MinionOrderTypes.MaxHealth).Find(x => x.CharData.BaseSkinName.ToLower().Contains("sru"));
+            if (minion == null) { return; }
+            var damage = Player.GetSummonerSpellDamage(minion, Damage.SummonerSpell.Smite);
+
+            if (kinm.Item("always_smite_red", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("red") && damage > minion.Health) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            if (kinm.Item("smite_r_if__dying", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("red") &&
+                ((Player.Health / Player.MaxHealth) * 100) <= kinm.Item("smite_r_if__dying", true).GetValue<Slider>().Value) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            if (kinm.Item("always_smite_blue", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("blue") && damage > minion.Health) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            //always smite frog from start to get poison buffs
+            if (kinm.Item("always_smite_frog", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("gromp")) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            if (kinm.Item("smite_brf_til_lvl", true).GetValue<Boolean>() &&
+                (minion.CharData.BaseSkinName.ToLower().Contains("gromp") ||
+                minion.CharData.BaseSkinName.ToLower().Contains("red") ||
+                minion.CharData.BaseSkinName.ToLower().Contains("blue")) && Player.Level <= kinm.Item("smite_brf_til_lvl", true).GetValue<Slider>().Value) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            if (kinm.Item("always_smite_wolf", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("murkwolf") && damage > minion.Health) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            if (kinm.Item("always_smite_golems", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("krug") && damage > minion.Health) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            if (kinm.Item("always_smite_wraiths", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("razorbeak") && damage > minion.Health) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            if (kinm.Item("always_smite_baron", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("baron") && damage > minion.Health) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+            if (kinm.Item("always_smite_dragon", true).GetValue<Boolean>() && minion.CharData.BaseSkinName.ToLower().Contains("dragon") && damage > minion.Health) {
+                Player.Spellbook.CastSpell(smite, minion); return;
+            }
+        }
+
+        static void smitespell() {
+            if (Player.Spellbook.GetSpell(SpellSlot.Summoner1).SData.Name.ToLower().Contains("smite")) {
+                smite = SpellSlot.Summoner1;
+                smiteSpell = new Spell(smite);
+            } else if (Player.Spellbook.GetSpell(SpellSlot.Summoner2).SData.Name.ToLower().Contains("smite")) {
+                smite = SpellSlot.Summoner2;
+                smiteSpell = new Spell(smite);
+            }
+        }
 
         static void fleee() {
             if (!Q.IsReady()) { return; }
