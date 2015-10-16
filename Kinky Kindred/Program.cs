@@ -25,10 +25,6 @@ namespace Kinky_Kindred {
         static Spell Q, W, E, R;
         static SpellSlot smite = SpellSlot.Unknown;
         static Spell smiteSpell;
-        static Items.Item botrk = new Items.Item(3153, 550);
-        static Items.Item mercurial = new Items.Item(3139, 0f);
-        static Items.Item dervish = new Items.Item(3137, 0f);
-        static Items.Item qss = new Items.Item(3140, 0f);
 
         static void Game_OnGameLoad(EventArgs args) {
             if (Player.ChampionName != "Kindred") { return; }
