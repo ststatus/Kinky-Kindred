@@ -85,6 +85,7 @@ namespace Kinky_Kindred {
 
 
             MiscM.AddItem(new MenuItem("killsteal", "Kill Steal", true).SetValue(true));
+            MiscM.AddItem(new MenuItem("fleeKey", "Flee Toggle").SetValue(new KeyBind("T".ToCharArray()[0], KeyBindType.Press)));
             MiscM.AddItem(new MenuItem("saveallies", "Save Allies (With R)", true).SetValue(true));
             MiscM.AddItem(new MenuItem("saveallieswhen", "Save when health < %", true).SetValue(new Slider(25, 0, 100)));
 
@@ -109,6 +110,9 @@ namespace Kinky_Kindred {
             }
             if (kinm.Item("jungleActive", true).GetValue<Boolean>()) {
                 JungleClear();
+            }
+            if (kinm.Item("fleeKey").GetValue<KeyBind>().Active) {
+                fleee();
             }
 
             switch (Orbwalker.ActiveMode) {
@@ -248,6 +252,69 @@ namespace Kinky_Kindred {
         #endregion
 
         #region MISC FUNCTIONS
+
+        static void fleee() {
+            if (!Q.IsReady()) { return; }
+            Drawing.DrawText(Drawing.Width * 0.45f, Drawing.Height * 0.10f, Color.GreenYellow, "Wall Jump Active");
+            var XXX = (Vector3)canjump();
+            if (XXX != null) {
+                Drawing.DrawText(Drawing.Width * 0.45f, Drawing.Height * 0.50f, Color.GreenYellow, "could jump here");
+                Q.Cast(XXX);
+                Orbwalking.Orbwalk(null, XXX, 90f, 0f, false, false);
+            } else {
+                Drawing.DrawText(Drawing.Width * 0.45f, Drawing.Height * 0.50f, Color.GreenYellow, "can't jump here");
+            }
+        }
+
+        static Vector3? canjump() {
+            var wallCheck = VectorHelper.GetFirstWallPoint(Player.Position, Player.Position);
+            //loop angles around the player to check for a point to jump to
+            //credits to hellsing wherever it has his code here somewhere... xD
+            float maxAngle = 80;
+            float step = maxAngle / 20;
+            float currentAngle = 0;
+            float currentStep = 0;
+            Vector3 currentPosition = Player.Position;
+            Vector2 direction = ((Player.Position.To2D() + 50) - currentPosition.To2D()).Normalized();
+            while (true) {
+                if (currentStep > maxAngle && currentAngle < 0) { break; }
+
+                if ((currentAngle == 0 || currentAngle < 0) && currentStep != 0) {
+                    currentAngle = (currentStep) * (float)Math.PI / 180;
+                    currentStep += step;
+                } else if (currentAngle > 0) {
+                    currentAngle = -currentAngle;
+                }
+
+                Vector3 checkPoint;
+
+                // One time only check for direct line of sight without rotating
+                if (currentStep == 0) {
+                    currentStep = step;
+                    checkPoint = currentPosition + 300 * direction.To3D();
+                } else {
+                    checkPoint = currentPosition + 300 * direction.Rotated(currentAngle).To3D();
+                }
+                if (checkPoint.IsWall()) { continue; }
+                // Check if there is a wall between the checkPoint and currentPosition
+                wallCheck = VectorHelper.GetFirstWallPoint(checkPoint, currentPosition);
+                if (wallCheck == null) { continue; } //jump to the next loop
+                //get the jump point
+                Vector3 wallPositionOpposite = (Vector3)VectorHelper.GetFirstWallPoint((Vector3)wallCheck, currentPosition, 5);
+                //check if the walking path is big enough to be worth a jump..if not then just skip to the next loop
+                if (Player.GetPath(wallPositionOpposite).ToList().To2D().PathLength() - Player.Distance(wallPositionOpposite) < 340) {
+                    Drawing.DrawText(Drawing.Width * 0.45f, Drawing.Height * 0.50f, Color.GreenYellow, "not worth a jump...");
+                    continue;
+                }
+
+                //check the jump distance and if its short enough then jump...
+                if (Player.Distance(wallPositionOpposite, true) < Math.Pow(300 - Player.BoundingRadius / 2, 2)) {
+                    return wallPositionOpposite;
+                }
+            }
+            return null;
+        }
+
         static void Event_OnProcessSpellCast(Obj_AI_Base sender, GameObjectProcessSpellCastEventArgs args) {
             if (Player.IsDead || !E.IsReady()) { return; }
 
@@ -280,4 +347,87 @@ namespace Kinky_Kindred {
         #endregion
 
     }
+
+    #region VECTOR HELPER FROM STACKOVERFLOW
+    internal class VectorHelper {
+        private static readonly Obj_AI_Hero player = ObjectManager.Player;
+
+        // Credits to furikuretsu from Stackoverflow (http://stackoverflow.com/a/10772759)
+        // Modified for my needs
+        #region ConeCalculations
+
+        public static bool IsLyingInCone(Vector2 position, Vector2 apexPoint, Vector2 circleCenter, double aperture) {
+            // This is for our convenience
+            double halfAperture = aperture / 2;
+
+            // Vector pointing to X point from apex
+            Vector2 apexToXVect = apexPoint - position;
+
+            // Vector pointing from apex to circle-center point.
+            Vector2 axisVect = apexPoint - circleCenter;
+
+            // X is lying in cone only if it's lying in 
+            // infinite version of its cone -- that is, 
+            // not limited by "round basement".
+            // We'll use dotProd() to 
+            // determine angle between apexToXVect and axis.
+            bool isInInfiniteCone = DotProd(apexToXVect, axisVect) / Magn(apexToXVect) / Magn(axisVect) >
+            // We can safely compare cos() of angles 
+            // between vectors instead of bare angles.
+            Math.Cos(halfAperture);
+
+            if (!isInInfiniteCone)
+                return false;
+
+            // X is contained in cone only if projection of apexToXVect to axis
+            // is shorter than axis. 
+            // We'll use dotProd() to figure projection length.
+            bool isUnderRoundCap = DotProd(apexToXVect, axisVect) / Magn(axisVect) < Magn(axisVect);
+
+            return isUnderRoundCap;
+        }
+
+        private static float DotProd(Vector2 a, Vector2 b) {
+            return a.X * b.X + a.Y * b.Y;
+        }
+
+        private static float Magn(Vector2 a) {
+            return (float)(Math.Sqrt(a.X * a.X + a.Y * a.Y));
+        }
+
+        #endregion
+
+        public static Vector2? GetFirstWallPoint(Vector3 from, Vector3 to, float step = 25) {
+            return GetFirstWallPoint(from.To2D(), to.To2D(), step);
+        }
+
+        public static Vector2? GetFirstWallPoint(Vector2 from, Vector2 to, float step = 25) {
+            var direction = (to - from).Normalized();
+
+            for (float d = 0; d < from.Distance(to); d = d + step) {
+                var testPoint = from + d * direction;
+                var flags = NavMesh.GetCollisionFlags(testPoint.X, testPoint.Y);
+                if (flags.HasFlag(CollisionFlags.Wall) || flags.HasFlag(CollisionFlags.Building)) {
+                    return from + (d - step) * direction;
+                }
+            }
+
+            return null;
+        }
+
+        public static List<Obj_AI_Base> GetDashObjects(IEnumerable<Obj_AI_Base> predefinedObjectList = null) {
+            List<Obj_AI_Base> objects;
+            if (predefinedObjectList != null)
+                objects = predefinedObjectList.ToList();
+            else
+                objects = ObjectManager.Get<Obj_AI_Base>().Where(o => o.IsValidTarget(Orbwalking.GetRealAutoAttackRange(o))).ToList();
+
+            var apexPoint = player.ServerPosition.To2D() + (player.ServerPosition.To2D() - Game.CursorPos.To2D()).Normalized() * Orbwalking.GetRealAutoAttackRange(player);
+
+            return objects.Where(o => VectorHelper.IsLyingInCone(o.ServerPosition.To2D(), apexPoint, player.ServerPosition.To2D(), Math.PI)).OrderBy(o => o.Distance(apexPoint, true)).ToList();
+        }
+    }
+    #endregion
 }
+
+
