@@ -31,7 +31,7 @@ namespace Kinky_Kindred {
             Q = new Spell(SpellSlot.Q, 500f);//340 is the jump range. 840f is the total
             W = new Spell(SpellSlot.W, 800f);
             E = new Spell(SpellSlot.E, 500f);
-            R = new Spell(SpellSlot.R, 550f);
+            R = new Spell(SpellSlot.R, 400f);
 
             menuload();
             Game.OnUpdate += Game_OnUpdate;
@@ -418,10 +418,10 @@ namespace Kinky_Kindred {
 
         void Obj_AI_Hero_OnProcessSpellCast(Obj_AI_Base sender, GameObjectProcessSpellCastEventArgs args) {
 
-            //Patented by XcxooxL
-            if (!sender.IsEnemy || !sender.IsValidTarget() || !sender.IsVisible) return;
+            //Patented by XcxooxL modified to my liking...
+            if (!sender.IsEnemy || !sender.IsValidTarget() || !sender.IsVisible || args.Target == null ||
+                !args.Target.IsAlly || args.Target.Position.Distance(Player.Position) > 400f || !R.IsReady()) { return; }
 
-            if (args.Target != null && !args.Target.IsAlly) return;
             double damage = 0;
             //if it is an Auto Attack !
             if (args.SData.IsAutoAttack()) {
@@ -432,7 +432,6 @@ namespace Kinky_Kindred {
                     damage += sender.GetAutoAttackDamage(Target) * 2;
                     //Console.WriteLine("Critical " + damage);
                     if (sender.InventoryItems.Any(item => item.Id.Equals(3031))) {
-                        Console.WriteLine("Infinity Edge");
                         damage += damage * 1.25;
                     }
                     //Infinity edge
@@ -440,65 +439,11 @@ namespace Kinky_Kindred {
                     damage += sender.GetAutoAttackDamage(Target, true);
                 }
                 damage += 2; //to be on the safe side
-                Add(Target, damage, sender.Distance(Target) / args.SData.MissileSpeed + 1 / sender.AttackDelay);
-                Console.WriteLine(
-                    "Target : " + Target.Name + "Damage : " + damage + " Time To Hit : " +
-                    sender.Distance(Target) / args.SData.MissileSpeed * 1000);
-
-            } else //if its a Spell
-              {
-                float delay = 0;
-                var missileSpeed = args.SData.MissileSpeed;
-                foreach (var spellInfo in
-                    SpellDatabase.Spells.Where(spellInfo => spellInfo.spellName.Equals(args.SData.Name))) {
-                    if (spellInfo.spellType.Equals(SpellType.Line)) {
-                        _myPoly = new Geometry.Polygon.Rectangle(
-                            args.Start, args.Start.Extend(args.End, spellInfo.range), spellInfo.radius);
-                    } else if (spellInfo.spellType.Equals(SpellType.Circular)) {
-
-                        var pos = sender.Distance(args.End) > spellInfo.range
-                            ? sender.Position.Extend(args.End, spellInfo.range)
-                            : args.End;
-                        _myPoly = new Geometry.Polygon.Circle(pos, spellInfo.radius);
-                    }
-                    missileSpeed = spellInfo.projectileSpeed;
-                    delay += spellInfo.spellDelay;
-                    break;
-                }
-
-                //Patented by xcxooxl ALL OF THIS IS MINE ! YOU WANT IT? CREDIT ME!
-
-                if (sender is Obj_AI_Hero) {
-                    var enemy = sender as Obj_AI_Hero;
-                    foreach (var ally in TrackList) {
-                        var timeToHit = delay + ally.Distance(args.Start) / missileSpeed * 1000 +
-                                        args.SData.ChannelDuration + args.SData.DelayTotalTimePercent * -1;
-                        if (args.SData.TargettingType.Equals(SpellDataTargetType.Unit)) //Targeted
-                        {
-                            damage += enemy.GetDamageSpell(args.Target as Obj_AI_Base, args.Slot).CalculatedDamage;
-                            Add(ally, damage, timeToHit);
-                        }
-
-
-                        Console.WriteLine(
-                            "Spellname" + args.SData.Name + " Time to hit " + timeToHit + "MissileSpeed " + missileSpeed);
-
-                        var futurePos = Prediction.GetPrediction(ally, timeToHit / 1000).UnitPosition;
-                        futurePosCircle = new Geometry.Polygon.Circle(futurePos, 125);
-                        if (_myPoly.IsInside(futurePos)) {
-                            damage += enemy.GetDamageSpell(ally, args.Slot).CalculatedDamage;
-                            Add(ally, damage, timeToHit);
-                        }
-                        Utility.DelayAction.Add(
-                            (int)(timeToHit + 1200), () => {
-                                futurePosCircle = null;
-                                _myPoly = null;
-                            }); //stop drawing polygons
-
-                    }
+                if (damage >= Target.Health) {
+                    var impactspd = sender.Distance(Target) / args.SData.MissileSpeed + 1 / sender.AttackDelay;
+                    if (impactspd < Game.Ping) { R.Cast(Target); }
                 }
             }
-
             //Patented by XcxooxL
         }
 
